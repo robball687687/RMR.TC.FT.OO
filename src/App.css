@@ -1,0 +1,246 @@
+/* =========================
+   Base / Theme Variables
+   ========================= */
+:root{
+  --bg: #ffffff;
+  --bg-soft: rgba(255,255,255,.86);
+  --fg: #111;
+  --muted: #6b7280;
+  --primary: #0f766e;       /* teal-ish works well with Thai palette */
+  --primary-ink: #fff;
+  --border: rgba(0,0,0,.08);
+  --radius: 16px;
+  --shadow-sm: 0 6px 18px rgba(0,0,0,.07);
+  --shadow-md: 0 14px 34px rgba(0,0,0,.1);
+}
+
+/* Subtle Thai rice-paper texture over a soft white gradient */
+html, body, #root{
+  height: 100%;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.88), rgba(255,255,255,0.96)),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'%3E%3Cg fill='none' stroke='%23e7e2d9' stroke-width='0.7' opacity='0.5'%3E%3Cpath d='M70 10c10 8 10 22 0 30c-10-8-10-22 0-30z'/%3E%3Cpath d='M20 70c8 10 22 10 30 0c-8-10-22-10-30 0z'/%3E%3Cpath d='M120 70c-8-10-22-10-30 0c8 10 22 10 30 0z'/%3E%3Ccircle cx='70' cy='70' r='0.8'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: auto, 280px 280px;
+  color: var(--fg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* =========================
+   Typography
+   ========================= */
+body{
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Noto Sans", "Apple Color Emoji","Segoe UI Emoji";
+  line-height: 1.5;
+}
+h1,h2,h3{ margin: .2rem 0 .6rem; line-height: 1.2; }
+h1{ font-size: clamp(1.6rem, 2.2vw + 1rem, 2.2rem); font-weight: 800; letter-spacing: .2px; }
+h2{ font-size: clamp(1.25rem, 1.5vw + .9rem, 1.6rem); font-weight: 700; }
+p, .muted{ color: var(--muted); }
+
+/* =========================
+   App shell
+   ========================= */
+.App{
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Sticky/blur header (great for tabs + search bar) */
+.app-header-sticky{
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  backdrop-filter: blur(10px);
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin: .5rem auto 1rem;
+  padding: .75rem;
+  max-width: 1024px;
+}
+
+/* Container */
+.container{
+  width: 100%;
+  max-width: 1024px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+/* =========================
+   Search pill
+   ========================= */
+.search-pill{
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #fff;
+  padding: .5rem .9rem;
+  box-shadow: var(--shadow-sm);
+}
+.search-pill input{
+  border: none;
+  outline: none;
+  width: 100%;
+  background: transparent;
+  font-size: .95rem;
+}
+
+/* =========================
+   Cards (menu items)
+   ========================= */
+.card{
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+  overflow: hidden;
+  transition: transform .18s ease, box-shadow .18s ease;
+  box-shadow: 0 0 0 rgba(0,0,0,0);
+}
+.card:hover{
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+.card__media{
+  position: relative;
+  padding-top: 62.5%;        /* 16:10 aspect */
+  background-size: cover;
+  background-position: center;
+  filter: saturate(1.02);
+}
+.card__price-badge{
+  position: absolute;
+  top: 8px; right: 8px;
+  background: rgba(17,17,17,.88);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: .25rem .5rem;
+  border-radius: 10px;
+}
+.card__body{
+  padding: .9rem 1rem 1rem;
+}
+.card__title{
+  font-weight: 800;
+  font-size: 1rem;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card__desc{
+  margin-top: .35rem;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* =========================
+   Buttons
+   ========================= */
+.btn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: .75rem 1rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform .12s ease, box-shadow .18s ease, background .18s ease;
+}
+.btn-primary{
+  background: var(--primary);
+  color: var(--primary-ink);
+  box-shadow: var(--shadow-sm);
+}
+.btn-primary:hover{
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+.btn-ghost{
+  background: #fff;
+  border-color: var(--border);
+}
+
+/* =========================
+   Floating Cart CTA
+   ========================= */
+.cart-fab{
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  width: min(90%, 400px);
+  background: var(--primary);
+  color: var(--primary-ink);
+  border-radius: 999px;
+  box-shadow: var(--shadow-md);
+  padding: .9rem 1.2rem;
+  display: flex;
+  justify-content: center;
+  gap: .5rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+/* =========================
+   Dialog polish
+   ========================= */
+.dialog__title{
+  font-weight: 800;
+}
+.dialog__row{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.subtotal{
+  text-align: right;
+}
+.subtotal small{ color: var(--muted); display: block; }
+.subtotal strong{ font-size: 1.15rem; }
+
+/* =========================
+   Responsive tweaks
+   ========================= */
+@media (min-width: 600px){
+  .container{ padding: 1.25rem; }
+}
+@media (min-width: 900px){
+  .app-header-sticky{ margin-top: 1rem; }
+}
+
+/* =========================
+   Keep the CRA demo bits if you still show the logo
+   ========================= */
+.App-logo{
+  height: 40vmin;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: no-preference){
+  .App-logo{ animation: App-logo-spin infinite 20s linear; }
+}
+.App-header{
+  background-color: #282c34;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(10px + 2vmin);
+  color: white;
+}
+.App-link{ color: #61dafb; }
+@keyframes App-logo-spin{
+  from{ transform: rotate(0deg); }
+  to{ transform: rotate(360deg); }
+}

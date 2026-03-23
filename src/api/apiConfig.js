@@ -1,0 +1,1 @@
+export const API_ROOT = "https://rmrthemeaonlineorderingwebapi.azurewebsites.net/api";
