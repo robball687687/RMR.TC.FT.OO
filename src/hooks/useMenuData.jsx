@@ -11,7 +11,10 @@ export default function useMenuData() {
     const loadMenu = async () => {
       try {
         setLoading(true);
-        const categories = await meaFtMenuApi.getWebMenu(true);
+
+        // load menu without time-frame filtering
+        const categories = await meaFtMenuApi.getWebMenu();
+
         if (alive) {
           setMenuCategories(Array.isArray(categories) ? categories : []);
         }

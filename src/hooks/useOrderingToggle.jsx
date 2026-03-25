@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import tcVariableApi from "../services/tcVariableApi";
 
-const ORDERING_TOGGLE_NAME = "Mea-Online-Ordering-Website-On-Off";
+const ORDERING_TOGGLE_NAME = "Mea-FT-Online-Ordering-Website-On-Off";
 
 export default function useOrderingToggle() {
-  const [enabled, setEnabled] = useState(true);
+  const [enabled, setEnabled] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -13,12 +13,19 @@ export default function useOrderingToggle() {
       .getValue(ORDERING_TOGGLE_NAME)
       .then((value) => {
         if (!alive) return;
+
         const rawValue = value?.toString().trim().toLowerCase();
-        const isOff = rawValue === "off" || rawValue === "0" || rawValue === "false";
-        setEnabled(!isOff);
+        const isOn =
+          rawValue === "on" ||
+          rawValue === "1" ||
+          rawValue === "true" ||
+          rawValue === "yes";
+
+        setEnabled(isOn);
       })
-      .catch(() => {
-        if (alive) setEnabled(true);
+      .catch((err) => {
+        console.error("Error loading ordering toggle:", err);
+        if (alive) setEnabled(false);
       });
 
     return () => {

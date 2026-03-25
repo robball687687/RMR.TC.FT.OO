@@ -30,7 +30,11 @@ import { useNavigate } from "react-router-dom";
 import { saveLastOrder } from "../utils/orderStorage";
 import ThaiPaperBackground from "../components/common/ThaiPaperBackground";
 import couponApi from "../services/couponApi";
-import paymentApi from "../services/paymentApi";
+import meaFTPaymentApi from "../services/meaFTPaymentApi";
+
+const ORDER_TYPE = "FT-Pickup";
+const ORDER_SOURCE = "MEAFTONLINE";
+const SALES_TAX_RATE = 0.07;
 
 const formatSelectedOptions = (opts) => {
   if (!opts) return "";
@@ -47,6 +51,17 @@ const formatSelectedOptions = (opts) => {
   return parts.join(" ");
 };
 
+const getOptionTotal = (opts, qty = 1) => {
+  if (!opts) return 0;
+
+  const optionSumPerUnit = Object.values(opts)
+    .flatMap((val) => (Array.isArray(val) ? val : [val]))
+    .filter(Boolean)
+    .reduce((sum, v) => sum + Number(v.priceAdjustment || 0), 0);
+
+  return optionSumPerUnit * qty;
+};
+
 const lineTotal = (item) => {
   const qty = Number(item.qty || 1);
 
@@ -58,7 +73,9 @@ const lineTotal = (item) => {
   if (Number.isFinite(explicit)) return explicit;
 
   const unit = Number(item.unitPrice ?? item.price ?? 0);
-  return unit * qty;
+  const optionTotal = getOptionTotal(item.options, qty);
+
+  return unit * qty + optionTotal;
 };
 
 export default function CheckoutPage() {
@@ -98,12 +115,15 @@ export default function CheckoutPage() {
       ? Math.min(rawDiscount, subtotal)
       : 0;
 
-  const tip = (subtotal - discount) * (tipPercent / 100);
-  const tax = (subtotal - discount) * 0.07;
-  const total = subtotal - discount + tax + tip;
+  const taxableAmount = Math.max(subtotal - discount, 0);
+  const tip = taxableAmount * (tipPercent / 100);
+  const tax = taxableAmount * SALES_TAX_RATE;
+  const total = taxableAmount + tax + tip;
 
   useEffect(() => {
-    if (cartItems.length === 0) navigate("/menu");
+    if (cartItems.length === 0) {
+      navigate("/menu");
+    }
   }, [cartItems, navigate]);
 
   const handleApplyCoupon = async () => {
@@ -155,6 +175,14 @@ export default function CheckoutPage() {
       return false;
     }
 
+    const [month, year] = expDate.split("/");
+    const monthNum = Number(month);
+
+    if (!monthNum || monthNum < 1 || monthNum > 12) {
+      setErrorMessage("Expiration month must be between 01 and 12.");
+      return false;
+    }
+
     const isAmex = /^3[47]\d{13}$/.test(cleanCard);
     if (!(isAmex ? /^\d{4}$/.test(cvv) : /^\d{3}$/.test(cvv))) {
       setErrorMessage("CVV must be 3 digits, or 4 digits for Amex.");
@@ -165,16 +193,15 @@ export default function CheckoutPage() {
     return true;
   };
 
-  const handlePlaceOrder = async () => {
-    if (!validateForm()) return;
-
-    setPlacing(true);
-
-    const orderItems = cartItems.map((item) => ({
-      id: item.id,
+  const buildFoodTruckOrderItems = () =>
+    cartItems.map((item) => ({
+      meaFTMenuItemId: Number(item.id),
+      id: Number(item.id),
       name: item.name,
-      price: item.price,
-      amount: item.qty,
+      unitPrice: Number(item.unitPrice ?? item.price ?? 0),
+      price: Number(item.unitPrice ?? item.price ?? 0),
+      quantity: Number(item.qty || 1),
+      amount: Number(item.qty || 1),
       selOptions: item.options
         ? Object.entries(item.options).flatMap(([optionId, value]) => {
             const values = Array.isArray(value) ? value : [value];
@@ -184,11 +211,36 @@ export default function CheckoutPage() {
               optionValue: v.displayName || v.valueName || "",
               price: Number(v.priceAdjustment || 0),
               meaFTMenuItemOptionId: parseInt(optionId, 10),
-              meaFTMenuItemOptionValueId: Number(v.meaFTMenuItemOptionValueId || 0),
+              meaFTMenuItemOptionValueId: Number(
+                v.meaFTMenuItemOptionValueId || 0
+              ),
+            }));
+          })
+        : [],
+      selectedOptions: item.options
+        ? Object.entries(item.options).flatMap(([optionId, value]) => {
+            const values = Array.isArray(value) ? value : [value];
+
+            return values.map((v) => ({
+              meaFTMenuItemOptionId: parseInt(optionId, 10),
+              meaFTMenuItemOptionValueId: Number(
+                v.meaFTMenuItemOptionValueId || 0
+              ),
+              optionValue: v.displayName || v.valueName || "",
+              price: Number(v.priceAdjustment || 0),
             }));
           })
         : [],
     }));
+
+  const handlePlaceOrder = async () => {
+    if (!validateForm()) return;
+
+    setPlacing(true);
+
+    const [month, year] = expDate.split("/");
+
+    const orderItems = buildFoodTruckOrderItems();
 
     const secureData = {
       AuthData: {
@@ -200,8 +252,8 @@ export default function CheckoutPage() {
         Phone: phone,
         Email: email,
         CardNumber: cardNumber.replace(/\s/g, ""),
-        Month: expDate.split("/")[0],
-        Year: `20${expDate.split("/")[1]}`,
+        Month: month,
+        Year: `20${year}`,
         CardCode: cvv,
         TipRaw: tipPercent.toString(),
         TipTotalDisplay: `$${tip.toFixed(2)}`,
@@ -210,10 +262,15 @@ export default function CheckoutPage() {
       },
     };
 
-    const payload = { data: orderItems, SecureData: secureData };
+    const payload = {
+      data: orderItems,
+      orderType: ORDER_TYPE,
+      source: ORDER_SOURCE,
+      SecureData: secureData,
+    };
 
     try {
-      const apiOrder = (await paymentApi.processPayment(payload)) || {};
+      const apiOrder = (await meaFTPaymentApi.processPayment(payload)) || {};
       const orderId =
         apiOrder.orderId ??
         `TEMP-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -224,6 +281,8 @@ export default function CheckoutPage() {
         name,
         phone,
         email,
+        orderType: ORDER_TYPE,
+        source: ORDER_SOURCE,
         totals: {
           subtotal: subtotal.toFixed(2),
           discount: discount.toFixed(2),
@@ -236,6 +295,7 @@ export default function CheckoutPage() {
           name: i.name,
           qty: i.qty || 1,
           price: i.price,
+          lineTotal: lineTotal(i),
           options: i.options || null,
         })),
         payment: {
@@ -248,8 +308,8 @@ export default function CheckoutPage() {
       clearCart();
       navigate(`/order-success/${orderId}`);
     } catch (err) {
-      console.error("Order creation failed:", err);
-      alert("There was a problem placing your order.");
+      console.error("Food truck order creation failed:", err);
+      setErrorMessage("There was a problem placing your order.");
     } finally {
       setPlacing(false);
     }
@@ -533,7 +593,8 @@ export default function CheckoutPage() {
                 <br />
                 It is <strong>not for our dine-in restaurant</strong>.
                 <br />
-                Please make sure you are ordering for pickup at the trailer location.
+                Please make sure you are ordering for pickup at the trailer
+                location.
                 <br />
                 We do not issue refunds for orders that are not picked up.
               </Alert>
@@ -566,7 +627,10 @@ export default function CheckoutPage() {
               <Stack spacing={1}>
                 <Row label="Subtotal" value={`$${subtotal.toFixed(2)}`} />
                 <Row label="Discount" value={`-$${discount.toFixed(2)}`} />
-                <Row label="Tax (7%)" value={`$${tax.toFixed(2)}`} />
+                <Row
+                  label={`Tax (${(SALES_TAX_RATE * 100).toFixed(0)}%)`}
+                  value={`$${tax.toFixed(2)}`}
+                />
                 <Row
                   label={`Tip (${tipPercent}%)`}
                   value={`$${tip.toFixed(2)}`}
