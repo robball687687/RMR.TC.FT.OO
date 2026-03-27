@@ -1,8 +1,6 @@
-// components/menu/MenuCard.jsx
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Card,
-  CardActionArea,
   Typography,
   Box,
   Button,
@@ -14,28 +12,72 @@ import {
   IconButton,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
+import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import PhotoLibraryIcon from "@mui/icons-material/PhotoLibrary";
 
 const FALLBACK_IMG =
   "https://rmrstorage.blob.core.windows.net/measite/MeaLogoBlackTrans.png";
 
+function getItemImages(item, menuItem) {
+  const raw = menuItem?.raw || {};
+
+  const rawImages =
+    menuItem?.images ||
+    menuItem?.Images ||
+    raw?.images ||
+    raw?.Images ||
+    item?.images ||
+    item?.Images ||
+    [];
+
+  const normalized = rawImages
+    .filter((img) => (img?.active ?? img?.Active ?? true))
+    .map((img, index) => ({
+      id:
+        img.meaFTMenuItemImageId ||
+        img.MeaFTMenuItemImageId ||
+        `${img.imageUrl || img.ImageUrl || "image"}-${index}`,
+      imageUrl: img.imageUrl || img.ImageUrl || "",
+      thumbnailUrl: img.thumbnailUrl || img.ThumbnailUrl || "",
+      altText: img.altText || img.AltText || item?.itemName || "Menu item",
+      displayOrder: img.displayOrder ?? img.DisplayOrder ?? index + 1,
+      isPrimary: img.isPrimary ?? img.IsPrimary ?? false,
+    }))
+    .filter((img) => !!img.imageUrl)
+    .sort((a, b) => {
+      if (a.isPrimary && !b.isPrimary) return -1;
+      if (!a.isPrimary && b.isPrimary) return 1;
+      return a.displayOrder - b.displayOrder;
+    });
+
+  if (normalized.length > 0) return normalized;
+
+  return [
+    {
+      id: "fallback-primary",
+      imageUrl: item?.itemImage || FALLBACK_IMG,
+      thumbnailUrl: item?.itemImage || FALLBACK_IMG,
+      altText: item?.itemName || "Menu item",
+      displayOrder: 1,
+      isPrimary: true,
+    },
+  ];
+}
+
 export default function MenuCard({
+  menuItem,
   item,
-  hasOptions,
-  selectedQty,
-  onQtyChange,
   onAdd,
   outOfStock = false,
-
-  // NEW (optional)
-  disabledReason = "", // e.g. "Separate order" or "Available until 7:30 PM"
-  disabledLabel = "",  // ribbon text; defaults to "Out of stock"
-  disabledButtonText = "", // button text; defaults to "Out"
-
+  disabledReason = "",
+  disabledLabel = "",
+  disabledButtonText = "",
   fixedWidth = 350,
-  fixedHeight = 340,
+  fixedHeight = 380,
 }) {
-  const price = Number(item.itemPrice || 0);
-  const fullDesc = item.itemDesc || "";
+  const price = Number(item?.itemPrice || 0);
+  const fullDesc = item?.itemDesc || "";
   const MAX_LEN = 110;
 
   const isLong = fullDesc.length > MAX_LEN;
@@ -43,76 +85,153 @@ export default function MenuCard({
     ? fullDesc.slice(0, MAX_LEN).trimEnd() + "..."
     : fullDesc;
 
-  const [descOpen, setDescOpen] = useState(false);
+  const images = useMemo(() => getItemImages(item, menuItem), [item, menuItem]);
 
-  const handleCardClick = () => {
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const [touchStartX, setTouchStartX] = useState(null);
+  const [touchEndX, setTouchEndX] = useState(null);
+
+  useEffect(() => {
+    setActiveImageIndex(0);
+    setTouchStartX(null);
+    setTouchEndX(null);
+  }, [item?.menuItemId, menuItem]);
+
+  useEffect(() => {
+    if (images.length <= 1 || dialogOpen || isHovered) return;
+
+    const interval = setInterval(() => {
+      setActiveImageIndex((prev) => (prev + 1) % images.length);
+    }, 3500);
+
+    return () => clearInterval(interval);
+  }, [images.length, dialogOpen, isHovered]);
+
+  const safeImageIndex =
+    activeImageIndex >= 0 && activeImageIndex < images.length ? activeImageIndex : 0;
+
+  const activeImage = images[safeImageIndex] || images[0];
+  const ribbonText = outOfStock ? disabledLabel || "Out of stock" : "";
+  const btnText = outOfStock ? disabledButtonText || "Out" : "Add";
+
+  const handleOpenDialog = (e) => {
+    e?.stopPropagation?.();
+    setDialogOpen(true);
+  };
+
+  const handleCloseDialog = () => setDialogOpen(false);
+
+  const goPrev = (e) => {
+    e?.stopPropagation?.();
+    setActiveImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
+  };
+
+  const goNext = (e) => {
+    e?.stopPropagation?.();
+    setActiveImageIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
+  };
+
+  const handleAddClick = (e) => {
+    e?.stopPropagation?.();
     if (!outOfStock) onAdd?.();
   };
 
-  const handleViewFullClick = (e) => {
-    e.stopPropagation();
-    setDescOpen(true);
+  const onTouchStart = (e) => {
+    if (images.length <= 1) return;
+    setTouchEndX(null);
+    setTouchStartX(e.targetTouches[0].clientX);
   };
 
-  const handleDialogClose = () => setDescOpen(false);
+  const onTouchMove = (e) => {
+    if (images.length <= 1) return;
+    setTouchEndX(e.targetTouches[0].clientX);
+  };
 
-  const ribbonText = outOfStock ? (disabledLabel || "Out of stock") : "";
-  const btnText = outOfStock ? (disabledButtonText || "Out") : "Add";
+  const onTouchEnd = () => {
+    if (images.length <= 1) return;
+    if (touchStartX == null || touchEndX == null) return;
+
+    const distance = touchStartX - touchEndX;
+    const minSwipeDistance = 40;
+
+    if (distance > minSwipeDistance) {
+      goNext();
+    } else if (distance < -minSwipeDistance) {
+      goPrev();
+    }
+  };
 
   return (
     <>
       <Card
         elevation={2}
         sx={{
-          width: fixedWidth,
+          width: "100%",
+          maxWidth: fixedWidth,
           height: fixedHeight,
-          borderRadius: 2,
+          borderRadius: 3,
           overflow: "hidden",
           position: "relative",
-          boxShadow: "0 8px 24px rgba(0,0,0,.08)",
-          "&:hover img": { transform: outOfStock ? "none" : "scale(1.04)" },
+          boxShadow: "0 10px 28px rgba(0,0,0,.10)",
+          mx: "auto",
+          "&:hover .hero-image": {
+            transform: outOfStock ? "none" : "scale(1.03)",
+          },
         }}
       >
-        <CardActionArea
-          onClick={outOfStock ? undefined : handleCardClick}
-          disabled={outOfStock}
-          sx={{ width: "100%", height: "100%", position: "relative" }}
+        <Box
+          sx={{
+            width: "100%",
+            height: "100%",
+            position: "relative",
+          }}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
         >
-          {/* FULL-BLEED IMAGE */}
           <Box
             component="img"
-            src={item.itemImage || FALLBACK_IMG}
-            alt={item.itemName}
+            className="hero-image"
+            src={activeImage?.imageUrl || FALLBACK_IMG}
+            alt={activeImage?.altText || item?.itemName || "Menu item"}
             loading="lazy"
             onError={(e) => {
               e.currentTarget.onerror = null;
               e.currentTarget.src = FALLBACK_IMG;
             }}
+            onClick={handleOpenDialog}
             sx={{
               position: "absolute",
               inset: 0,
               width: "100%",
               height: "100%",
               objectFit: "cover",
-              transition: "transform .35s ease, filter .2s ease, opacity .2s ease",
+              objectPosition: "center 40%",
+              transition:
+                "transform .35s ease, filter .2s ease, opacity .25s ease",
               willChange: "transform",
               filter: outOfStock ? "grayscale(60%) brightness(0.8)" : "none",
               opacity: outOfStock ? 0.85 : 1,
+              cursor: "pointer",
+              userSelect: "none",
             }}
           />
 
-          {/* PRICE CHIP */}
           {price > 0 && (
             <Box
               sx={{
                 position: "absolute",
-                top: 8,
-                right: 8,
-                px: 1.1,
-                py: 0.4,
+                top: 10,
+                right: 10,
+                px: 1.2,
+                py: 0.45,
                 borderRadius: 999,
-                bgcolor: "rgba(255,255,255,0.9)",
-                backdropFilter: "blur(6px)",
+                bgcolor: "rgba(255,255,255,0.92)",
+                backdropFilter: "blur(8px)",
                 fontWeight: 800,
                 fontSize: 13,
                 border: "1px solid rgba(0,0,0,.08)",
@@ -124,7 +243,112 @@ export default function MenuCard({
             </Box>
           )}
 
-          {/* DISABLED RIBBON */}
+          {images.length > 1 && (
+            <Button
+              size="small"
+              startIcon={<PhotoLibraryIcon />}
+              onClick={handleOpenDialog}
+              sx={{
+                position: "absolute",
+                top: 10,
+                left: 10,
+                borderRadius: 999,
+                bgcolor: "rgba(255,255,255,0.92)",
+                color: "text.primary",
+                px: 1.2,
+                minWidth: 0,
+                fontWeight: 700,
+                textTransform: "none",
+                "&:hover": {
+                  bgcolor: "rgba(255,255,255,0.98)",
+                },
+              }}
+            >
+              {images.length}
+            </Button>
+          )}
+
+          {images.length > 1 && (
+            <>
+              <IconButton
+                onClick={goPrev}
+                sx={{
+                  position: "absolute",
+                  top: "50%",
+                  left: 10,
+                  transform: "translateY(-50%)",
+                  bgcolor: "rgba(255,255,255,0.82)",
+                  backdropFilter: "blur(4px)",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
+                  opacity: isHovered ? 1 : 0.85,
+                  transition: "opacity 0.2s ease",
+                  "&:hover": {
+                    bgcolor: "rgba(255,255,255,0.96)",
+                  },
+                }}
+              >
+                <ChevronLeftIcon />
+              </IconButton>
+
+              <IconButton
+                onClick={goNext}
+                sx={{
+                  position: "absolute",
+                  top: "50%",
+                  right: 10,
+                  transform: "translateY(-50%)",
+                  bgcolor: "rgba(255,255,255,0.82)",
+                  backdropFilter: "blur(4px)",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
+                  opacity: isHovered ? 1 : 0.85,
+                  transition: "opacity 0.2s ease",
+                  "&:hover": {
+                    bgcolor: "rgba(255,255,255,0.96)",
+                  },
+                }}
+              >
+                <ChevronRightIcon />
+              </IconButton>
+
+              <Box
+                sx={{
+                  position: "absolute",
+                  left: "50%",
+                  bottom: 100,
+                  transform: "translateX(-50%)",
+                  display: "flex",
+                  gap: 0.75,
+                  px: 1.1,
+                  py: 0.5,
+                  borderRadius: 999,
+                  bgcolor: "rgba(0,0,0,0.35)",
+                  backdropFilter: "blur(4px)",
+                }}
+              >
+                {images.map((img, index) => (
+                  <Box
+                    key={`dot-${img.id}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveImageIndex(index);
+                    }}
+                    sx={{
+                      width: index === safeImageIndex ? 16 : 7,
+                      height: 7,
+                      borderRadius: 999,
+                      bgcolor:
+                        index === safeImageIndex
+                          ? "#fff"
+                          : "rgba(255,255,255,0.55)",
+                      transition: "all 0.2s ease",
+                      cursor: "pointer",
+                    }}
+                  />
+                ))}
+              </Box>
+            </>
+          )}
+
           {outOfStock && (
             <Box
               sx={{
@@ -149,7 +373,6 @@ export default function MenuCard({
             </Box>
           )}
 
-          {/* FOOTER OVERLAY */}
           <Box
             sx={{
               position: "absolute",
@@ -165,33 +388,25 @@ export default function MenuCard({
               backdropFilter: "blur(6px)",
             }}
           >
-            {/* Name + Add button row */}
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               <Typography
                 variant="subtitle2"
                 noWrap
-                sx={{ color: "#fff", fontWeight: 800, flex: 1 }}
-                title={item.itemName}
+                sx={{ color: "#fff", fontWeight: 800, flex: 1, minWidth: 0 }}
+                title={item?.itemName}
               >
-                {item.itemName}
+                {item?.itemName}
               </Typography>
 
               <Tooltip
-                title={
-                  outOfStock
-                    ? disabledReason || "Currently unavailable"
-                    : ""
-                }
+                title={outOfStock ? disabledReason || "Currently unavailable" : ""}
               >
                 <span>
                   <Button
                     size="small"
                     variant="contained"
                     disabled={outOfStock}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (!outOfStock) onAdd?.();
-                    }}
+                    onClick={handleAddClick}
                     sx={{
                       borderRadius: 999,
                       textTransform: "none",
@@ -206,7 +421,6 @@ export default function MenuCard({
               </Tooltip>
             </Box>
 
-            {/* Optional disabledReason line (so users *see* why) */}
             {outOfStock && disabledReason && (
               <Typography
                 variant="caption"
@@ -216,7 +430,6 @@ export default function MenuCard({
               </Typography>
             )}
 
-            {/* Short description + "View full" */}
             {fullDesc && (
               <Box
                 sx={{
@@ -243,7 +456,7 @@ export default function MenuCard({
                   <Button
                     size="small"
                     variant="text"
-                    onClick={handleViewFullClick}
+                    onClick={handleOpenDialog}
                     sx={{
                       color: "rgba(255,255,255,0.9)",
                       textTransform: "none",
@@ -258,11 +471,10 @@ export default function MenuCard({
               </Box>
             )}
           </Box>
-        </CardActionArea>
+        </Box>
       </Card>
 
-      {/* FULL DESCRIPTION MODAL */}
-      <Dialog open={descOpen} onClose={handleDialogClose} fullWidth maxWidth="sm">
+      <Dialog open={dialogOpen} onClose={handleCloseDialog} fullWidth maxWidth="md">
         <DialogTitle
           sx={{
             display: "flex",
@@ -272,32 +484,172 @@ export default function MenuCard({
           }}
         >
           <Typography variant="h6" sx={{ mr: 1 }}>
-            {item.itemName}
+            {item?.itemName}
           </Typography>
-          <IconButton onClick={handleDialogClose} size="small">
+          <IconButton onClick={handleCloseDialog} size="small">
             <CloseIcon />
           </IconButton>
         </DialogTitle>
 
         <DialogContent dividers>
-          {item.itemImage && (
+          <Box sx={{ position: "relative", mb: 2 }}>
             <Box
-              component="img"
-              src={item.itemImage}
-              alt={item.itemName}
               sx={{
+                position: "relative",
                 width: "100%",
-                borderRadius: 1,
-                mb: 2,
-                objectFit: "cover",
-                maxHeight: 260,
+                height: { xs: 260, sm: 360, md: 460 },
+                borderRadius: 2,
+                overflow: "hidden",
+                boxShadow: "0 10px 28px rgba(0,0,0,0.14)",
+                backgroundColor: "#f7f4ef",
               }}
-            />
+            >
+              <Box
+                component="img"
+                src={activeImage?.imageUrl || FALLBACK_IMG}
+                alt={activeImage?.altText || item?.itemName || "Menu item"}
+                onError={(e) => {
+                  e.currentTarget.onerror = null;
+                  e.currentTarget.src = FALLBACK_IMG;
+                }}
+                sx={{
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  filter: "blur(18px)",
+                  transform: "scale(1.06)",
+                  opacity: 0.35,
+                }}
+              />
+
+              <Box
+                component="img"
+                src={activeImage?.imageUrl || FALLBACK_IMG}
+                alt={activeImage?.altText || item?.itemName || "Menu item"}
+                onError={(e) => {
+                  e.currentTarget.onerror = null;
+                  e.currentTarget.src = FALLBACK_IMG;
+                }}
+                sx={{
+                  position: "relative",
+                  zIndex: 1,
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "contain",
+                  p: 1,
+                }}
+              />
+            </Box>
+
+            {images.length > 1 && (
+              <>
+                <IconButton
+                  onClick={goPrev}
+                  sx={{
+                    position: "absolute",
+                    top: "50%",
+                    left: 12,
+                    transform: "translateY(-50%)",
+                    bgcolor: "rgba(255,255,255,0.88)",
+                    "&:hover": { bgcolor: "rgba(255,255,255,0.98)" },
+                  }}
+                >
+                  <ChevronLeftIcon />
+                </IconButton>
+
+                <IconButton
+                  onClick={goNext}
+                  sx={{
+                    position: "absolute",
+                    top: "50%",
+                    right: 12,
+                    transform: "translateY(-50%)",
+                    bgcolor: "rgba(255,255,255,0.88)",
+                    "&:hover": { bgcolor: "rgba(255,255,255,0.98)" },
+                  }}
+                >
+                  <ChevronRightIcon />
+                </IconButton>
+
+                <Box
+                  sx={{
+                    position: "absolute",
+                    bottom: 12,
+                    left: "50%",
+                    transform: "translateX(-50%)",
+                    display: "flex",
+                    gap: 0.75,
+                    px: 1.25,
+                    py: 0.6,
+                    borderRadius: 999,
+                    bgcolor: "rgba(0,0,0,0.38)",
+                    backdropFilter: "blur(4px)",
+                  }}
+                >
+                  {images.map((img, index) => (
+                    <Box
+                      key={`dialog-dot-${img.id}`}
+                      onClick={() => setActiveImageIndex(index)}
+                      sx={{
+                        width: index === safeImageIndex ? 18 : 8,
+                        height: 8,
+                        borderRadius: 999,
+                        bgcolor:
+                          index === safeImageIndex
+                            ? "#fff"
+                            : "rgba(255,255,255,0.5)",
+                        transition: "all 0.2s ease",
+                        cursor: "pointer",
+                      }}
+                    />
+                  ))}
+                </Box>
+              </>
+            )}
+          </Box>
+
+          {images.length > 1 && (
+            <Box
+              sx={{
+                display: "flex",
+                gap: 1,
+                mb: 2,
+                overflowX: "auto",
+                pb: 0.5,
+              }}
+            >
+              {images.map((img, index) => (
+                <Box
+                  key={img.id}
+                  component="img"
+                  src={img.thumbnailUrl || img.imageUrl}
+                  alt={img.altText}
+                  onClick={() => setActiveImageIndex(index)}
+                  sx={{
+                    width: 82,
+                    height: 82,
+                    objectFit: "cover",
+                    borderRadius: 1.5,
+                    border: "2px solid",
+                    borderColor:
+                      index === safeImageIndex ? "primary.main" : "divider",
+                    flex: "0 0 auto",
+                    cursor: "pointer",
+                    backgroundColor: "#f7f4ef",
+                    p: 0.25,
+                  }}
+                />
+              ))}
+            </Box>
           )}
 
-          <Typography variant="body1" sx={{ mb: 1.5 }}>
-            {fullDesc}
-          </Typography>
+          {!!fullDesc && (
+            <Typography variant="body1" sx={{ mb: 1.5 }}>
+              {fullDesc}
+            </Typography>
+          )}
 
           {price > 0 && (
             <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
@@ -312,13 +664,13 @@ export default function MenuCard({
               variant="contained"
               onClick={() => {
                 onAdd?.();
-                handleDialogClose();
+                handleCloseDialog();
               }}
             >
               Add to cart
             </Button>
           )}
-          <Button onClick={handleDialogClose}>Close</Button>
+          <Button onClick={handleCloseDialog}>Close</Button>
         </DialogActions>
       </Dialog>
     </>

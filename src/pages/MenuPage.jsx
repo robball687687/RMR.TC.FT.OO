@@ -1,4 +1,3 @@
-// src/pages/MenuPage.jsx
 import React, { useMemo, useState } from "react";
 import {
   Box,
@@ -29,6 +28,23 @@ import ThaiPaperBackground from "../components/common/ThaiPaperBackground";
 const Alert = React.forwardRef(function Alert(props, ref) {
   return <MuiAlert elevation={6} ref={ref} variant="filled" {...props} />;
 });
+
+function normalizeMenuItem(menuItem) {
+  const item = menuItem?.item || {};
+  const raw = menuItem?.raw || {};
+
+  return {
+    ...menuItem,
+    images:
+      menuItem?.images ||
+      menuItem?.Images ||
+      raw?.images ||
+      raw?.Images ||
+      item?.images ||
+      item?.Images ||
+      [],
+  };
+}
 
 export default function MenuPage() {
   const navigate = useNavigate();
@@ -62,11 +78,13 @@ export default function MenuPage() {
 
   const filteredItems = useMemo(() => {
     const items = menuCategories?.[activeCategory]?.menuItems || [];
-    return items.filter(
-      ({ item }) =>
-        (item.itemName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (item.itemDesc || "").toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    return items
+      .map(normalizeMenuItem)
+      .filter(
+        ({ item }) =>
+          (item.itemName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (item.itemDesc || "").toLowerCase().includes(searchTerm.toLowerCase())
+      );
   }, [menuCategories, activeCategory, searchTerm]);
 
   const openSnack = (message, severity = "success") => {
@@ -77,6 +95,11 @@ export default function MenuPage() {
 
   const addMenuItemToCart = (menuItem, qty = 1, overridePrice = null) => {
     const i = menuItem.item;
+    const primaryImage =
+      menuItem?.images?.find((x) => x.isPrimary || x.IsPrimary)?.imageUrl ||
+      menuItem?.images?.[0]?.imageUrl ||
+      i.itemImage;
+
     const priceToUse =
       overridePrice != null ? overridePrice : Number(i.itemPrice || 0);
 
@@ -86,7 +109,7 @@ export default function MenuPage() {
         name: i.itemName,
         description: i.itemDesc,
         price: priceToUse,
-        image: i.itemImage,
+        image: primaryImage,
         qty,
       });
     }
@@ -105,7 +128,7 @@ export default function MenuPage() {
     openSnack("Added to cart!", "success");
   };
 
-  const handleOptionsConfirm = ({ selections, finalPrice, quantity }) => {
+  const handleOptionsConfirm = ({ selections, finalPrice, quantity, image }) => {
     const i = selectedItem.item;
 
     addToCart({
@@ -113,7 +136,7 @@ export default function MenuPage() {
       name: i.itemName,
       description: i.itemDesc,
       price: finalPrice,
-      image: i.itemImage,
+      image: image || i.itemImage,
       qty: quantity ?? selectedItem._qty ?? 1,
       options: selections,
     });
@@ -126,7 +149,6 @@ export default function MenuPage() {
   return (
     <ThaiPaperBackground>
       <Box sx={{ px: 2, py: { xs: 2, md: 3 } }}>
-        {/* TITLE */}
         <Typography
           variant="h4"
           align="center"
@@ -135,7 +157,6 @@ export default function MenuPage() {
           Menu
         </Typography>
 
-        {/* 🔥 NEW BANNER */}
         <Paper
           elevation={0}
           sx={{
@@ -179,7 +200,6 @@ export default function MenuPage() {
           </Paper>
         ) : (
           <>
-            {/* CATEGORY + SEARCH */}
             <Paper
               elevation={0}
               sx={{
@@ -225,17 +245,24 @@ export default function MenuPage() {
               </Box>
             </Paper>
 
-            {/* MENU GRID */}
             {loading ? (
               <Grid container spacing={2}>
                 {Array.from({ length: 6 }).map((_, i) => (
-                  <Grid key={i} item xs={12} sm={6}>
+                  <Grid key={i} size={{ xs: 12, sm: 6 }}>
                     <Paper sx={{ p: 1.5, borderRadius: 3 }}>
-                      <Skeleton variant="rectangular" height={160} sx={{ borderRadius: 2 }} />
+                      <Skeleton
+                        variant="rectangular"
+                        height={160}
+                        sx={{ borderRadius: 2 }}
+                      />
                       <Skeleton sx={{ mt: 1 }} width="60%" />
                       <Skeleton width="90%" />
                       <Skeleton width="40%" />
-                      <Skeleton variant="rectangular" height={36} sx={{ mt: 1, borderRadius: 2 }} />
+                      <Skeleton
+                        variant="rectangular"
+                        height={36}
+                        sx={{ mt: 1, borderRadius: 2 }}
+                      />
                     </Paper>
                   </Grid>
                 ))}
@@ -247,10 +274,10 @@ export default function MenuPage() {
                   const outOfStock = !isActive(menuItem);
 
                   return (
-                    <Grid item xs={12} sm={6} md={3} key={i.menuItemId}>
+                    <Grid key={i.menuItemId} size={{ xs: 12, sm: 6, md: 3 }}>
                       <MenuCard
+                        menuItem={menuItem}
                         item={i}
-                        hasOptions={!!menuItem.options?.length}
                         onAdd={(payload) =>
                           handleAddToCartClick(menuItem, payload?.qty ?? 1)
                         }
@@ -271,7 +298,6 @@ export default function MenuPage() {
           </>
         )}
 
-        {/* SNACKBAR */}
         <Snackbar
           open={snackOpen}
           autoHideDuration={3200}
@@ -280,7 +306,6 @@ export default function MenuPage() {
           <Alert severity={snackSeverity}>{snackMsg}</Alert>
         </Snackbar>
 
-        {/* OPTIONS */}
         <OptionsDialog
           open={pickerOpen}
           onClose={() => setPickerOpen(false)}
@@ -295,7 +320,6 @@ export default function MenuPage() {
           onDismiss={dismissBanner}
         />
 
-        {/* FLOATING CART */}
         {isOrderingEnabled && showCartButton && cartItems.length > 0 && (
           <FloatingCartButton
             onClick={() => navigate("/checkout")}
