@@ -564,6 +564,7 @@ export default function CheckoutPage() {
                   <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25}>
                     <TextField
                       fullWidth
+                      placeholder="MM/YY"
                       label="Expiration (MM/YY)"
                       value={expDate}
                       onChange={(e) => {
