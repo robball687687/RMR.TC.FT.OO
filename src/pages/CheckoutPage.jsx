@@ -566,7 +566,15 @@ export default function CheckoutPage() {
                       fullWidth
                       label="Expiration (MM/YY)"
                       value={expDate}
-                      onChange={(e) => setExpDate(e.target.value)}
+                      onChange={(e) => {
+                          let value = e.target.value.replace(/\D/g, ""); // numbers only
+
+                          if (value.length >= 3) {
+                            value = value.slice(0, 2) + "/" + value.slice(2, 4);
+                          }
+
+                          setExpDate(value.slice(0, 5)); // max MM/YY
+                        }}
                       autoComplete="cc-exp"
                       inputMode="numeric"
                     />
